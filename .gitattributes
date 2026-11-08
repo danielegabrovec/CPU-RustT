@@ -1,0 +1,18 @@
+* text=auto eol=lf
+*.rs text eol=lf
+*.toml text eol=lf
+*.json text eol=lf
+*.mjs text eol=lf
+*.js text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.png binary
+*.ico binary
+*.exe binary
+# Preserve upstream license texts verbatim, including their original spacing.
+THIRD-PARTY-NOTICES.txt -whitespace
+scripts/license-texts/*.txt -whitespace

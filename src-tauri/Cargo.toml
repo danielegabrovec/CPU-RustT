@@ -1,0 +1,25 @@
+[package]
+name = "cpu-rustt"
+version = "0.1.1"
+description = "Monitor hardware desktop locale con Tauri e Rust"
+authors = ["Daniele Gabrovec"]
+edition = "2024"
+rust-version = "1.95"
+license = "MIT"
+default-run = "cpu-rustt"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-single-instance = "2"
+rust-cpu = { path = "../crates/monitor-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["sync", "time"] }
+anyhow = "1"
+
+[dev-dependencies]
+tempfile = "3"

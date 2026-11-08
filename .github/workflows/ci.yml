@@ -1,0 +1,66 @@
+name: Build and verify
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  windows:
+    name: Windows app, core and installer
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable action
+        with:
+          toolchain: '1.99.0'
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: '. -> src-tauri/target'
+      - run: npm ci
+      - run: npm run check:publication
+      - name: Check source, tests and synthetic frontend
+        shell: pwsh
+        run: ./scripts/verify.ps1
+      - name: Build unsigned Windows installer and portable ZIP
+        shell: pwsh
+        run: ./scripts/build.ps1 -SkipChecks
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: CPU-RustT-windows-x64
+          path: |
+            artifacts/CPU-RustT.exe
+            artifacts/*_x64-setup.exe
+            artifacts/*_windows-x64.zip
+            artifacts/SHA256SUMS.txt
+          if-no-files-found: error
+  linux-core:
+    name: Linux core (no desktop certification)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+        with:
+          toolchain: '1.99.0'
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
+        with:
+          workspaces: '. -> src-tauri/target'
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy -p rust-cpu --all-targets --locked -- -D warnings
+      - run: cargo test -p rust-cpu --all-targets --locked

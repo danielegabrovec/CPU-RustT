@@ -1,0 +1,22 @@
+name: Bug
+description: Segnala un problema riproducibile.
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Versione CPU-RustT e Windows
+      placeholder: 0.1.1, Windows 11 x64
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Passi per riprodurre
+      description: Descrivi risultato atteso e osservato, senza dati privati.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Contesto tecnico
+      description: CPU/GPU e provider sono facoltativi. Rimuovi percorsi personali, processi, credenziali ed eventi privati dagli allegati.

@@ -1,0 +1,9 @@
+[workspace]
+members = ["src-tauri", "crates/monitor-core"]
+default-members = ["src-tauri"]
+resolver = "3"
+
+[profile.release]
+lto = "thin"
+strip = true
+codegen-units = 1

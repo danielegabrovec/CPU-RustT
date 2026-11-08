@@ -1,0 +1,26 @@
+{
+  "name": "cpu-rustt",
+  "version": "0.1.1",
+  "private": true,
+  "author": "Daniele Gabrovec",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/danielegabrovec/CPU-RustT.git" },
+  "engines": { "node": ">=24" },
+  "type": "module",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build --no-binary-patching",
+    "check": "node scripts/check.mjs",
+    "check:publication": "node scripts/check-publication.mjs",
+    "test": "npm run test:frontend",
+    "test:frontend": "node tests/frontend-fixture.mjs",
+    "test:native": "node tests/run-native.mjs",
+    "test:native:attach": "node tests/native-smoke.mjs",
+    "licenses": "python scripts/generate-notices.py"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.0",
+    "@tauri-apps/cli": "2.12.2"
+  }
+}

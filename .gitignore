@@ -1,0 +1,17 @@
+/node_modules/
+/src-tauri/target/
+/src-tauri/gen/schemas/
+/crates/monitor-core/target/
+/artifacts/
+/test-output/
+/target/
+*.db
+*.db-wal
+*.db-shm
+*.partial
+.DS_Store
+desktop.ini
+*.sqlite3*
+*.log
+*.pdb
+.env*

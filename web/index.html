@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="it" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <meta name="description" content="CPU-RustT: monitor hardware locale con motore Rust, sessioni SQLite e strumenti per LLM locali.">
+  <title>CPU-RustT · Monitor hardware</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" type="module"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Vai al contenuto</a>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Navigazione principale">
+      <a class="brand" href="#overview" aria-label="CPU-RustT, panoramica">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><rect x="8" y="8" width="16" height="16" rx="4"/><path d="M12 1v5m8-5v5M12 26v5m8-5v5M1 12h5m-5 8h5m20-8h5m-5 8h5"/><path d="m12 18 3-6 2 8 3-6"/></svg></span>
+        <span>CPU-RustT<small>HARDWARE INSIGHT</small></span>
+      </a>
+      <div class="nav-label">MONITORAGGIO</div>
+      <nav id="navigation"></nav>
+      <div class="sidebar-bottom">
+        <div class="local-badge"><span class="status-dot"></span>Dati sul tuo PC</div>
+        <p class="author">Daniele Gabrovec</p>
+        <button type="button" id="about-button" class="text-link about-button">Informazioni e licenze</button>
+      </div>
+    </aside>
+    <div class="workspace">
+      <header class="topbar">
+        <div class="connection"><span class="status-dot" id="connection-dot"></span><span id="connection-text">Avvio del motore Rust…</span></div>
+        <div class="top-actions">
+          <span id="operation-status" class="operation-status" role="status" aria-live="polite" hidden></span>
+          <span class="sample-label" id="sample-label">In attesa del primo campione</span>
+          <button type="button" id="theme-button" class="icon-button" aria-label="Attiva tema chiaro" title="Cambia tema"></button>
+          <button type="button" id="about-top-button" class="icon-button" aria-label="Informazioni e licenze" title="Informazioni e licenze">i</button>
+        </div>
+      </header>
+      <main id="main" tabindex="-1">
+        <div class="page-heading">
+          <div><div class="eyebrow" id="eyebrow">IL TUO SISTEMA, IN TEMPO REALE</div><h1 id="page-title">Panoramica</h1><p id="page-description">Una lettura chiara delle risorse del tuo computer.</p></div>
+          <div class="heading-actions"><button type="button" id="pause-button" class="button secondary">Pausa vista</button><button type="button" id="export-button" class="button secondary">Esporta report</button><button type="button" id="record-button" class="button primary">Registra sessione</button></div>
+        </div>
+        <div id="view-context" class="view-context"></div>
+        <div id="global-banner" class="banner" role="status" hidden></div>
+        <div id="replay-banner" class="replay-banner" hidden></div>
+        <div id="content"><div class="empty-state"><div class="spinner" aria-hidden="true"></div><h2>Connessione al monitor</h2><p>Il motore Rust sta preparando l’inventario hardware e il primo campione.</p></div></div>
+      </main>
+      <footer class="footer"><span id="footer-system">Raccolta hardware locale</span><span id="footer-status">Nessun dato inviato online</span></footer>
+    </div>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="action-dialog" aria-labelledby="dialog-title"><form id="dialog-form"><h2 id="dialog-title"></h2><p id="dialog-description"></p><label id="dialog-label" for="dialog-input">Nome</label><input id="dialog-input" maxlength="120" autocomplete="off"><div class="dialog-actions"><button type="button" id="dialog-cancel" class="button secondary">Annulla</button><button type="submit" id="dialog-confirm" class="button primary">Conferma</button></div></form></dialog>
+  <dialog id="about-dialog" class="about-dialog" aria-labelledby="about-title">
+    <div class="about-heading"><div><div class="eyebrow">SOFTWARE INDIPENDENTE</div><h2 id="about-title">CPU-RustT</h2></div><button type="button" id="about-close" class="button secondary">Chiudi</button></div>
+    <div id="about-content" class="about-content"><p>Caricamento informazioni…</p></div>
+  </dialog>
+</body>
+</html>
