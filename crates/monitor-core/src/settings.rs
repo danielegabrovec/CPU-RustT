@@ -130,7 +130,7 @@ impl AlertEngine {
             return Vec::new();
         }
         let mut values = Vec::new();
-        if !s.per_core.is_empty() {
+        if !s.per_core.is_empty() && (0.0..=100.0).contains(&s.cpu_percent) {
             values.push((
                 "cpu".to_string(),
                 "Carico CPU".to_string(),
@@ -139,7 +139,7 @@ impl AlertEngine {
                 "%",
             ));
         }
-        if s.memory_total > 0 {
+        if s.memory_total > 0 && s.memory_used <= s.memory_total {
             values.push((
                 "ram".into(),
                 "Memoria RAM".into(),
@@ -151,6 +151,7 @@ impl AlertEngine {
         for (i, g) in s.gpus.iter().enumerate() {
             if let (Some(u), Some(total)) = (g.memory_used, g.memory_total)
                 && total > 0
+                && u <= total
             {
                 values.push((
                     format!("vram-{i}"),
@@ -263,6 +264,34 @@ mod tests {
         assert!(e.evaluate(&s, &t).is_empty());
         s.timestamp_unix = 131;
         assert_eq!(e.evaluate(&s, &t).len(), 1);
+    }
+    #[test]
+    fn invalid_cpu_and_memory_counters_cannot_generate_pressure_alerts() {
+        let mut engine = AlertEngine::default();
+        let thresholds = AlertThresholds::default();
+        let mut snapshot = Snapshot {
+            timestamp_unix: 100,
+            cpu_percent: 120.0,
+            per_core: vec![120.0],
+            memory_used: 200,
+            memory_total: 100,
+            gpus: vec![crate::model::GpuRow {
+                memory_used: Some(200),
+                memory_total: Some(100),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        assert!(engine.evaluate(&snapshot, &thresholds).is_empty());
+        snapshot.cpu_percent = f32::INFINITY;
+        assert!(engine.evaluate(&snapshot, &thresholds).is_empty());
+        // Invalid measurements must not consume the cooldown for a later valid signal.
+        snapshot.cpu_percent = 100.0;
+        snapshot.memory_used = 100;
+        snapshot.gpus[0].memory_used = Some(100);
+        let events = engine.evaluate(&snapshot, &thresholds);
+        assert_eq!(events.len(), 3);
+        assert!(events.iter().all(|event| event.value == 100.0));
     }
     #[test]
     fn preferences_validate_and_roundtrip() {

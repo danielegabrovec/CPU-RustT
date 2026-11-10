@@ -69,6 +69,10 @@ let frozen = null;
 let replay = null;
 let replayIndex = 0;
 let sessions = [];
+let sessionQuery = '';
+let sessionState = 'all';
+let sessionPageIndex = 0;
+const sessionPageSize = 25;
 let comparison = null;
 let comparisonIds = {left:'', right:''};
 let processQuery = '';
@@ -202,7 +206,7 @@ const stat = (label, value, unit, sub, name, percent = null, color = '') => `<se
 const panel = (title, content, extra = '', subtitle = '') => `<section class="panel"><div class="panel-head"><div><h2>${esc(title)}</h2>${subtitle ? `<p>${esc(subtitle)}</p>` : ''}</div>${extra}</div>${content}</section>`;
 const empty = (title, description, name = 'diagnostics', button = '') => `<div class="empty-state"><div class="empty-icon">${icon(name)}</div><h2>${esc(title)}</h2><p>${esc(description)}</p>${button}</div>`;
 const specs = (rows, compact = false) => `<dl class="spec-list">${rows.map(row => `<div class="spec-row ${compact ? 'compact' : ''}"><dt>${esc(row.label)}</dt><dd>${esc(row.value || 'Non disponibile')}</dd></div>`).join('')}</dl>`;
-const table = (headers, rows, className = '') => `<div class="table-wrap"><table class="${className}"><thead><tr>${headers.map(h => `<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${rows.length ? rows.join('') : `<tr><td colspan="${headers.length}" class="quiet">Nessun dato disponibile nel campione.</td></tr>`}</tbody></table></div>`;
+const table = (headers, rows, className = '') => `<div class="table-wrap"><table class="${className}"><thead><tr>${headers.map(h => typeof h==='string'?`<th scope="col">${h}</th>`:`<th scope="col" aria-sort="${h.sort}">${h.label}</th>`).join('')}</tr></thead><tbody>${rows.length ? rows.join('') : `<tr><td colspan="${headers.length}" class="quiet">Nessun dato disponibile nel campione.</td></tr>`}</tbody></table></div>`;
 const badge = (text, kind = '') => `<span class="badge ${kind}">${esc(text)}</span>`;
 function statusBadge(status) { const online = /^(online|ready|ok|available)$/i.test(status); return badge(status || 'Non disponibile', online ? 'online' : 'warning'); }
 function metricCards(s) {
@@ -368,7 +372,10 @@ function processesPage(v) {
   if (replay) return empty('Dettagli dei processi non archiviati','I campioni archiviati conservano soltanto un riepilogo dei processi LLM. Torna alla vista live per esplorare tutti i processi correnti.','processes');
   return panel('Esplora i processi',`<div class="toolbar"><div class="field search"><label for="process-search">Cerca per nome o PID</label><input id="process-search" type="search" placeholder="Es. ollama, chrome, 1234…" value="${esc(processQuery)}"></div><div class="field"><label for="process-sort">Ordina per</label><select id="process-sort">${[['Cpu','CPU'],['Memory','Memoria RAM'],['Name','Nome'],['Pid','PID']].map(([key,label])=>`<option value="${key}" ${processSort===key?'selected':''}>${label}</option>`).join('')}</select></div><button type="button" class="button secondary" id="process-order">${processAscending?'↑ Crescente':'↓ Decrescente'}</button><button type="button" class="button secondary" data-action="save-sort">Ricorda ordine</button></div><div id="process-table">${processTable(v)}</div><p class="hint">CPU normalizzata sulla capacità complessiva della macchina (0–100%). La RAM è il working set; le attribuzioni GPU per PID non si sommano per stimare memoria fisica. Seleziona una riga per fissarne i dettagli al campione.</p><div id="process-detail">${processDetailView()}</div>`,`<span class="panel-tag" id="process-count">${sortedProcesses(v).length} PROCESSI</span>`);
 }
-const processTable = v => table(['Processo','PID','CPU','RAM','GPU','VRAM dedicata','Lettura','Scrittura'],processRows(sortedProcesses(v),true));
+function processTable(v) {
+  const heading=(key,label)=>({sort:processSort===key?(processAscending?'ascending':'descending'):'none',label:`<button type="button" class="sort-button" data-sort="${key}" aria-label="Ordina per ${label}">${label}<span aria-hidden="true">${processSort===key?(processAscending?' ↑':' ↓'):' ↕'}</span></button>`});
+  return table([heading('Name','Processo'),heading('Pid','PID'),heading('Cpu','CPU'),heading('Memory','RAM'),'GPU','VRAM dedicata','Lettura','Scrittura'],processRows(sortedProcesses(v),true));
+}
 function processDetailView() {
   if (!processDetail) return '';
   const p = processDetail.row;
@@ -400,9 +407,46 @@ function diagnosticsHardwarePage(v) {
   const warnings = [...new Set([...(v.inventory.warnings||[]),...(s.warnings||[])])];
   return `<div class="two-cols">${panel('Stato del campionamento',specs([{label:'Ultimo campione',value:clock(s.timestamp_unix)},{label:'Durata raccolta',value:`${number(s.sampling_ms,0)} ms`},{label:'Intervallo richiesto',value:`${number(v.preferences.interval_ms,0)} ms`},{label:'Tempo monitoraggio',value:duration(s.elapsed_secs)},{label:'Archivio SQLite',value:v.database_path},{label:'Esportazioni',value:v.export_dir}]))}${panel('Sensori disponibili',table(['Sensore','Temperatura'],(s.sensors||[]).map(sensor=>`<tr><td class="wrap">${esc(sensor.name)}</td><td>${number(sensor.temperature)} °C</td></tr>`))+specs(s.sensor_details||[],true))}</div>${panel('Avvisi dei provider',warnings.length ? `<ul class="notice-list">${warnings.map(w=>`<li>${esc(w)}</li>`).join('')}</ul>` : '<p class="hint">Nessun avviso segnalato dai provider nel campione corrente.</p>')}${panel('Avvisi di soglia',(v.alerts||[]).length ? `<ul class="notice-list">${[...(v.alerts||[])].reverse().slice(0,100).map(a=>`<li>${esc(a.message)}<span class="alert-time">${clock(a.timestamp_unix)} · soglia ${number(a.threshold)}</span></li>`).join('')}</ul>` : '<p class="hint">Nessuna soglia superata nei campioni disponibili. Puoi modificare le soglie nelle impostazioni.</p>')}${panel('Fonti e limiti',specs([{label:'CPU / RAM / processi',value:'sysinfo. CPU processo normalizzata sul totale dei processori logici; frequenza OS, non clock effettivo per core.'},{label:'Identità hardware',value:'CPUID e WMI/SMBIOS. Informazioni dichiarate da CPU, sistema operativo e firmware.'},{label:'GPU Windows',value:'Contatori WDDM/DXGI, più nvidia-smi quando disponibile. Copertura dipendente da driver e hardware.'},{label:'Sensori avanzati',value:'LibreHardwareMonitor soltanto se già disponibile e in esecuzione. Nessun driver kernel installato automaticamente.'},{label:'Dati non misurati',value:'SPD diretto, timing RAM live, accesso SMBus/MSR e SMART. I valori non esposti restano non disponibili.'}]))}`;
 }
-function sessionPage(v) {
-  return `<div class="toolbar"><button type="button" class="button secondary" data-action="refresh-sessions">Aggiorna elenco</button><button type="button" class="button secondary" data-action="import-session">Importa sessione JSON</button><button type="button" class="button secondary" data-action="backup">Backup archivio</button></div>${sessions.length ? panel('Archivio sessioni',table(['Sessione','Campioni','Durata','CPU media','RAM media','Stato','Azioni'],sessions.map(s=>`<tr><td><div class="session-name" title="${esc(s.name)}">${esc(s.name)}</div><div class="session-meta">#${s.id} · ${date(s.started_utc)}</div></td><td>${number(s.samples,0)}</td><td>${duration(s.duration_secs)}</td><td>${pct(s.cpu?.average)}</td><td>${bytes(s.ram?.average)}</td><td>${badge(s.id===live.active_session?'Registrazione':s.state,s.id===live.active_session?'online':'')}</td><td><div class="session-actions"><button class="button secondary small" type="button" data-session-action="replay" data-id="${s.id}">Replay</button><button class="button secondary small" type="button" data-session-action="export" data-id="${s.id}">Esporta</button><button class="button secondary small" type="button" data-session-action="rename" data-id="${s.id}">Rinomina</button><button class="button danger small" type="button" data-session-action="delete" data-id="${s.id}" ${s.id===live.active_session?'disabled':''}>Elimina</button></div></td></tr>`)),badge(`${sessions.length} SESSIONI`)) : empty('Il tuo primo punto di confronto','Premi Registra sessione prima di iniziare un lavoro, poi arresta la registrazione al termine. I campioni vengono conservati localmente in SQLite.','sessions')}<p class="hint">Le statistiche usano tutti i campioni salvati. Il replay mostra un’anteprima distribuita sull’intera durata, fino a 300 campioni; l’esportazione conserva i dati archiviati. I dettagli dei thread sono disponibili quando presenti nei campioni; l’archivio riduce i processi al riepilogo LLM.</p>${replay?panel('Sessione selezionata',`<div class="mini-stats"><div class="mini-stat"><small>CPU media</small><strong>${pct(replay.summary.cpu?.average)}</strong></div><div class="mini-stat"><small>CPU P95</small><strong>${pct(replay.summary.cpu?.p95)}</strong></div><div class="mini-stat"><small>RAM media</small><strong>${bytes(replay.summary.ram?.average)}</strong></div></div>${resourceChart(view())}${benchmarks(view())}`,badge(replay.summary.name)):''}`;
+function sessionStatus(session) {
+  if(session.id===live?.active_session)return {key:'recording',label:'In registrazione',kind:'online'};
+  if(session.state==='complete'||session.state==='finished')return {key:'complete',label:'Completata',kind:''};
+  if(session.state==='incomplete'||session.state==='interrupted')return {key:'incomplete',label:'Interrotta',kind:'warning'};
+  return {key:'open',label:'Aperta',kind:'warning'};
 }
+function filteredSessions() {
+  const query=sessionQuery.trim().toLocaleLowerCase('it-IT');
+  return sessions.filter(session=>(!query||session.name.toLocaleLowerCase('it-IT').includes(query)||`#${session.id}`.includes(query))&&(sessionState==='all'||sessionStatus(session).key===sessionState));
+}
+function sessionArchive() {
+  const filtered=filteredSessions();
+  const pages=Math.max(1,Math.ceil(filtered.length/sessionPageSize));
+  sessionPageIndex=Math.min(sessionPageIndex,pages-1);
+  const first=sessionPageIndex*sessionPageSize;
+  const rows=filtered.slice(first,first+sessionPageSize).map(s=>{
+    const status=sessionStatus(s);
+    const picked=side=>String(comparisonIds[side])===String(s.id);
+    return `<tr><td><div class="session-name" title="${esc(s.name)}">${esc(s.name)}</div><div class="session-meta">#${s.id} · ${date(s.started_utc)}</div></td><td>${number(s.samples,0)}</td><td>${duration(s.duration_secs)}</td><td>${pct(s.cpu?.average)}</td><td>${bytes(s.ram?.average)}</td><td>${badge(status.label,status.kind)}</td><td><div class="session-actions"><button class="button secondary small ${picked('left')?'active':''}" type="button" data-session-action="compare-left" data-id="${s.id}" aria-label="Usa ${esc(s.name)} come riferimento A" aria-pressed="${picked('left')}">A</button><button class="button secondary small ${picked('right')?'active':''}" type="button" data-session-action="compare-right" data-id="${s.id}" aria-label="Usa ${esc(s.name)} come candidata B" aria-pressed="${picked('right')}">B</button><button class="button secondary small" type="button" data-session-action="replay" data-id="${s.id}" ${s.samples?'':'disabled'}>Replay</button><button class="button secondary small" type="button" data-session-action="export" data-id="${s.id}">Esporta</button><button class="button secondary small" type="button" data-session-action="rename" data-id="${s.id}">Rinomina</button><button class="button danger small" type="button" data-session-action="delete" data-id="${s.id}" ${s.id===live.active_session?'disabled':''}>Elimina</button></div></td></tr>`;
+  });
+  const ready=comparisonIds.left&&comparisonIds.right&&comparisonIds.left!==comparisonIds.right;
+  return `<div class="archive-summary"><span id="session-count" role="status">${filtered.length?`${first+1}–${Math.min(first+sessionPageSize,filtered.length)} di ${filtered.length}`:'0'} sessioni${filtered.length!==sessions.length?` · ${sessions.length} nell’archivio`:''}</span><span>A: ${comparisonIds.left?`#${esc(comparisonIds.left)}`:'da scegliere'} · B: ${comparisonIds.right?`#${esc(comparisonIds.right)}`:'da scegliere'}</span><button type="button" class="button secondary small" data-navigate="compare" ${ready?'':'disabled'}>Apri confronto A/B</button></div>${rows.length?table(['Sessione','Campioni','Durata','CPU media','RAM media','Stato','Azioni'],rows):'<p class="archive-empty">Nessuna sessione corrisponde alla ricerca e allo stato selezionato.</p>'}<div class="pagination" aria-label="Pagine dell’archivio"><button type="button" class="button secondary small" data-action="session-previous" ${sessionPageIndex===0?'disabled':''}>← Precedente</button><span>Pagina ${sessionPageIndex+1} di ${pages}</span><button type="button" class="button secondary small" data-action="session-next" ${sessionPageIndex>=pages-1?'disabled':''}>Successiva →</button></div>`;
+}
+function sessionPage(v) {
+  return `<div class="toolbar"><button type="button" class="button secondary" data-action="refresh-sessions">Aggiorna elenco</button><button type="button" class="button secondary" data-action="import-session">Importa sessione JSON</button><button type="button" class="button secondary" data-action="backup">Backup archivio</button></div>${sessions.length ? panel('Archivio sessioni',`<div class="toolbar"><div class="field search"><label for="session-search">Cerca per nome o ID</label><input id="session-search" type="search" placeholder="Es. rendering, #12…" value="${esc(sessionQuery)}" aria-controls="session-archive"></div><div class="field"><label for="session-state">Stato</label><select id="session-state">${[['all','Tutte le sessioni'],['complete','Completate'],['incomplete','Interrotte'],['recording','In registrazione']].map(([key,label])=>`<option value="${key}" ${sessionState===key?'selected':''}>${label}</option>`).join('')}</select></div></div><div id="session-archive">${sessionArchive()}</div>`,badge(`${sessions.length} SESSIONI`)) : empty('Il tuo primo punto di confronto','Premi Registra sessione prima di iniziare un lavoro, poi arresta la registrazione al termine. I campioni vengono conservati localmente in SQLite.','sessions')}<p class="hint">Scegli A e B su due righe diverse per preparare un confronto. Le statistiche usano tutti i campioni salvati. Il replay mostra un’anteprima distribuita sull’intera durata, fino a 300 campioni; l’esportazione conserva i dati archiviati. I dettagli dei thread sono disponibili quando presenti nei campioni; l’archivio riduce i processi al riepilogo LLM.</p>${replay?panel('Sessione selezionata',`<div class="mini-stats"><div class="mini-stat"><small>CPU media</small><strong>${pct(replay.summary.cpu?.average)}</strong></div><div class="mini-stat"><small>CPU P95</small><strong>${pct(replay.summary.cpu?.p95)}</strong></div><div class="mini-stat"><small>RAM media</small><strong>${bytes(replay.summary.ram?.average)}</strong></div></div>${resourceChart(view())}${benchmarks(view())}`,badge(replay.summary.name)):''}`;
+}
+function updateSessionArchive() {
+  const archive=$('#session-archive');if(!archive)return;
+  const focus=focusedContentSelector(),scroll=$('.table-wrap',archive)?.scrollLeft||0;
+  archive.innerHTML=sessionArchive();
+  const table=$('.table-wrap',archive);if(table)table.scrollLeft=scroll;
+  if(focus){const restored=$(focus,archive);if(restored&&!restored.disabled)restored.focus({preventScroll:true});}
+}
+function updateComparisonContext() {
+  const context=$('#comparison-context');if(!context||!comparison)return;
+  const changed=String(comparison.left.id)!==String(comparisonIds.left)||String(comparison.right.id)!==String(comparisonIds.right);
+  context.classList.toggle('changed',changed);
+  context.innerHTML=`<strong>${changed?'Selezione modificata: il risultato precedente rimane visibile.':'Confronto visualizzato'}</strong><span>A: #${comparison.left.id} · ${esc(comparison.left.name)} → B: #${comparison.right.id} · ${esc(comparison.right.name)}.${changed?' Premi Confronta sessioni per applicare la nuova selezione.':''}</span>`;
+}
+
 function metricFormat(value,unit) {
   if (!finite(value)) return '—';
   if (/byte/i.test(unit)||unit==='B') return `${value<0?'−':''}${bytes(Math.abs(value))}`;
@@ -416,9 +460,10 @@ function comparePage(v) {
   const options = selected => '<option value="">Scegli una sessione</option>'+sessions.map(s=>`<option value="${s.id}" ${String(s.id)===String(selected)?'selected':''}>#${s.id} · ${esc(s.name)} · ${date(s.started_utc)}</option>`).join('');
   let result = '';
   if (comparison) {
-    result = `<div class="two-cols"><div class="comparison-name"><small>A · RIFERIMENTO</small><strong>${esc(comparison.left.name)}</strong><p>${number(comparison.left.samples,0)} campioni · ${duration(comparison.left.duration_secs)}</p></div><div class="comparison-name"><small>B · CANDIDATA</small><strong>${esc(comparison.right.name)}</strong><p>${number(comparison.right.samples,0)} campioni · ${duration(comparison.right.duration_secs)}</p></div></div>${panel('Differenze fra sessioni',comparisonTable(comparison.metrics||[]))}<div class="two-cols">${panel('CPU · sessione A',chart(comparison.left_series||[],[{label:'CPU A',value:cpuValue}],{normalized:true,label:'CPU sessione A a progressione normalizzata'}))}${panel('CPU · sessione B',chart(comparison.right_series||[],[{label:'CPU B',value:cpuValue}],{normalized:true,label:'CPU sessione B a progressione normalizzata'}))}</div>${(comparison.benchmarks||[]).map(b=>panel(b.label,`<p class="hint">${esc(b.method)} · ${b.runs_left} prove A / ${b.runs_right} prove B</p>${comparisonTable(b.metrics||[])}${(b.warnings||[]).map(w=>`<p class="hint warning-text">${esc(w)}</p>`).join('')}`)).join('')}${(comparison.warnings||[]).length?panel('Limiti del confronto',`<ul class="notice-list">${comparison.warnings.map(w=>`<li>${esc(w)}</li>`).join('')}</ul>`):''}<p class="hint">Gli assi temporali dei grafici sono normalizzati sulla durata, non sincronizzati al tempo di calendario. Una riduzione del carico non dimostra da sola un miglioramento delle prestazioni.</p>`;
+    const changed=String(comparison.left.id)!==String(comparisonIds.left)||String(comparison.right.id)!==String(comparisonIds.right);
+    result = `<div id="comparison-context" class="report-context ${changed?'changed':''}" role="status"><strong>${changed?'Selezione modificata: il risultato precedente rimane visibile.':'Confronto visualizzato'}</strong><span>A: #${comparison.left.id} · ${esc(comparison.left.name)} → B: #${comparison.right.id} · ${esc(comparison.right.name)}.${changed?' Premi Confronta sessioni per applicare la nuova selezione.':''}</span></div><div class="two-cols"><div class="comparison-name"><small>A · RIFERIMENTO</small><strong>${esc(comparison.left.name)}</strong><p>${number(comparison.left.samples,0)} campioni · ${duration(comparison.left.duration_secs)}</p></div><div class="comparison-name"><small>B · CANDIDATA</small><strong>${esc(comparison.right.name)}</strong><p>${number(comparison.right.samples,0)} campioni · ${duration(comparison.right.duration_secs)}</p></div></div>${panel('Differenze fra sessioni',comparisonTable(comparison.metrics||[]))}<div class="two-cols">${panel('CPU · sessione A',chart(comparison.left_series||[],[{label:'CPU A',value:cpuValue}],{normalized:true,label:'CPU sessione A a progressione normalizzata'}))}${panel('CPU · sessione B',chart(comparison.right_series||[],[{label:'CPU B',value:cpuValue}],{normalized:true,label:'CPU sessione B a progressione normalizzata'}))}</div>${(comparison.benchmarks||[]).map(b=>panel(b.label,`<p class="hint">${esc(b.method)} · ${b.runs_left} prove A / ${b.runs_right} prove B</p>${comparisonTable(b.metrics||[])}${(b.warnings||[]).map(w=>`<p class="hint warning-text">${esc(w)}</p>`).join('')}`)).join('')}${(comparison.warnings||[]).length?panel('Limiti del confronto',`<ul class="notice-list">${comparison.warnings.map(w=>`<li>${esc(w)}</li>`).join('')}</ul>`):''}<p class="hint">Gli assi temporali dei grafici sono normalizzati sulla durata, non sincronizzati al tempo di calendario. Una riduzione del carico non dimostra da sola un miglioramento delle prestazioni.</p>`;
   } else result = empty('Due sessioni, un confronto chiaro','Scegli un riferimento A e una candidata B. La media, il picco e il P95 sono calcolati su tutti i campioni, con avvisi per dati mancanti e benchmark non confrontabili.','compare');
-  return `<form id="compare-form" class="toolbar"><div class="field search"><label for="compare-left">A · Riferimento</label><select id="compare-left" required>${options(comparisonIds.left)}</select></div><div class="field search"><label for="compare-right">B · Candidata</label><select id="compare-right" required>${options(comparisonIds.right)}</select></div><button class="button primary" type="submit">Confronta sessioni</button></form>${result}`;
+  return `<form id="compare-form" class="toolbar"><div class="field search"><label for="compare-left">A · Riferimento</label><select id="compare-left" required>${options(comparisonIds.left)}</select></div><div class="field search"><label for="compare-right">B · Candidata</label><select id="compare-right" required>${options(comparisonIds.right)}</select></div><button type="button" class="button secondary" data-action="swap-comparison" ${comparisonIds.left||comparisonIds.right?'':'disabled'}>Scambia A ↔ B</button><button class="button primary" type="submit" ${sessions.length<2?'disabled':''}>Confronta sessioni</button></form>${result}`;
 }
 function settingsPage(v) {
   const p = v.preferences, a = p.alerts;
@@ -519,9 +564,13 @@ function render({force = false} = {}) {
   }
   if (!force && $('#content').contains(document.activeElement) && (document.activeElement.tagName==='INPUT'||document.activeElement===openSelect)) {
     if (route==='processes') updateProcessTable();
+    if (route==='sessions') updateSessionArchive();
     return;
   }
   const scroll = window.scrollY;
+  const tableScrolls=$('#content').dataset.route===route?$$('.table-wrap',$('#content')).map(node=>node.scrollLeft):[];
+  const active=document.activeElement;
+  const selection=active?.tagName==='INPUT'&&typeof active.selectionStart==='number'?{start:active.selectionStart,end:active.selectionEnd,direction:active.selectionDirection}:null;
   const focusSelector = focusedContentSelector();
   const savedCursor=chartCursor?{...chartCursor}:null;
   chartCounter=0;chartRegistry.clear();
@@ -530,10 +579,12 @@ function render({force = false} = {}) {
   $('#content').dataset.route = route;
   bindPage();
   restoreDraft();
+  $$('.table-wrap',$('#content')).forEach((node,index)=>{node.scrollLeft=tableScrolls[index]||0;});
   if (focusSelector) {
     const restored = $(focusSelector, $('#content'));
     restoringFocus=true;
     (restored || $('#main')).focus({preventScroll:true});
+    if(restored&&selection&&restored.tagName==='INPUT')restored.setSelectionRange(selection.start,selection.end,selection.direction);
     restoringFocus=false;
   }
   if(savedCursor){
@@ -553,7 +604,7 @@ function focusedContentSelector() {
   const active = document.activeElement;
   if (!active || !$('#content').contains(active)) return null;
   if (active.id) return `#${CSS.escape(active.id)}`;
-  const keys = ['action','sessionAction','id','process','llmRuntime','llmModel','navigate','chartKey'];
+  const keys = ['action','sessionAction','id','process','llmRuntime','llmModel','navigate','chartKey','sort'];
   const selectors = keys.filter(key=>active.dataset[key]!==undefined).map(key=>{
     const attr = key.replace(/[A-Z]/g,char=>`-${char.toLowerCase()}`);
     return `[data-${attr}="${CSS.escape(active.dataset[key])}"]`;
@@ -639,7 +690,7 @@ async function poll() {
 }
 async function refreshSessions() {
   if(sessionRefresh)return sessionRefresh;
-  sessionRefresh=ipc('get_sessions').then(result=>{sessions=result;lastSessionsRefresh=Date.now();}).finally(()=>{sessionRefresh=null;});
+  sessionRefresh=ipc('get_sessions').then(result=>{sessions=result;for(const side of ['left','right'])if(comparisonIds[side]&&!sessions.some(s=>String(s.id)===String(comparisonIds[side])))comparisonIds[side]='';lastSessionsRefresh=Date.now();}).finally(()=>{sessionRefresh=null;});
   return sessionRefresh;
 }
 async function refreshSessionView(){
@@ -661,11 +712,17 @@ function updateProcessTable() {
   const v = view();
   if (!v || !$('#process-table')) return;
   const scroll = $('.table-wrap',$('#process-table'))?.scrollLeft || 0;
+  const focus=focusedContentSelector();
   $('#process-table').innerHTML = processTable(v);
   $('.table-wrap',$('#process-table')).scrollLeft=scroll;
   $('#process-count').textContent = `${sortedProcesses(v).length} PROCESSI`;
+  $('#process-sort').value=processSort;
+  $('#process-order').textContent=processAscending?'↑ Crescente':'↓ Decrescente';
+  if(focus){const restored=$(focus,$('#process-table'));if(restored)restored.focus({preventScroll:true});}
 }
 function bindPage() {
+  $('#session-search')?.addEventListener('input',event=>{sessionQuery=event.target.value;sessionPageIndex=0;updateSessionArchive();});
+  $('#session-state')?.addEventListener('change',event=>{sessionState=event.target.value;sessionPageIndex=0;updateSessionArchive();});
   $('#cpu-series')?.addEventListener('change',event=>{cpuSeries=event.target.value;render({force:true});});
   $('#cpu-repeats')?.addEventListener('change',event=>{cpuRepeats=Number(event.target.value);});
   $('#gpu-adapter')?.addEventListener('change',event=>{gpuSelected=event.target.value;render({force:true});});
@@ -709,8 +766,8 @@ function bindPage() {
     if (comparisonIds.left===comparisonIds.right) {toast('Scegli due sessioni diverse per il confronto.',true);return;}
     action(async()=>{comparison=await ipc('compare_sessions',{left:Number(comparisonIds.left),right:Number(comparisonIds.right)});render({force:true});});
   });
-  $('#compare-left')?.addEventListener('change',event=>{comparisonIds.left=event.target.value;});
-  $('#compare-right')?.addEventListener('change',event=>{comparisonIds.right=event.target.value;});
+  $('#compare-left')?.addEventListener('change',event=>{comparisonIds.left=event.target.value;updateComparisonContext();const swap=$('[data-action="swap-comparison"]');if(swap)swap.disabled=!(comparisonIds.left||comparisonIds.right);});
+  $('#compare-right')?.addEventListener('change',event=>{comparisonIds.right=event.target.value;updateComparisonContext();const swap=$('[data-action="swap-comparison"]');if(swap)swap.disabled=!(comparisonIds.left||comparisonIds.right);});
 }
 
 async function showAbout(){
@@ -742,7 +799,22 @@ function exportContext(){
 }
 
 $('#navigation').innerHTML = routes.map(([id,label])=>`${id==='analysis'?'<div class="nav-section-label">ANALISI E ARCHIVIO</div>':id==='settings'?'<div class="nav-divider"></div>':''}<a class="nav-item" href="#${id}" data-route="${id}">${icon(id)}<span>${label}</span><span class="nav-arrow" aria-hidden="true">›</span></a>`).join('');
-$('#navigation').addEventListener('click',event=>{const link=event.target.closest('[data-route]');if(link){event.preventDefault();navigate(link.dataset.route);}});
+function filterNavigation() {
+  const query=$('#navigation-search').value.trim().toLocaleLowerCase('it-IT');
+  let matches=0;
+  $$('.nav-item').forEach(link=>{const meta=routes.find(item=>item[0]===link.dataset.route);link.hidden=Boolean(query&&!`${meta[1]} ${meta[3]}`.toLocaleLowerCase('it-IT').includes(query));if(!link.hidden)matches++;});
+  $$('.nav-section-label,.nav-divider').forEach(node=>{node.hidden=Boolean(query);});
+  $('#navigation-empty').hidden=matches>0;
+}
+$('#navigation-search').addEventListener('input',filterNavigation);
+$('#navigation-search').addEventListener('keydown',event=>{
+  if(event.key==='Escape'){event.preventDefault();event.target.value='';filterNavigation();$('#main').focus({preventScroll:true});}
+  if(event.key==='Enter'){const first=$('.nav-item:not([hidden])');if(first){event.preventDefault();const target=first.dataset.route;event.target.value='';filterNavigation();navigate(target);}}
+});
+document.addEventListener('keydown',event=>{
+  if(event.ctrlKey&&!event.altKey&&!event.metaKey&&event.key.toLowerCase()==='k'&&!$('dialog[open]')){event.preventDefault();$('#navigation-search').focus();$('#navigation-search').select();}
+});
+$('#navigation').addEventListener('click',event=>{const link=event.target.closest('[data-route]');if(link){event.preventDefault();$('#navigation-search').value='';filterNavigation();navigate(link.dataset.route);}});
 $('.brand').addEventListener('click',event=>{event.preventDefault();navigate('overview');});
 window.addEventListener('hashchange',()=>navigate(location.hash.slice(1)));
 $('#pause-button').addEventListener('click',()=>{if(!live?.snapshot||replay)return;paused=!paused;frozen=paused?structuredClone(live):null;render({force:true});});
@@ -760,6 +832,10 @@ $('#record-button').addEventListener('click',async()=>{
 $('#content').addEventListener('click',async event=>{
   const target=event.target.closest('button,[data-process]');
   if (!target) return;
+  if (target.dataset.sort) {
+    processAscending=processSort===target.dataset.sort?!processAscending:['Name','Pid'].includes(target.dataset.sort);
+    processSort=target.dataset.sort;updateProcessTable();return;
+  }
   if (target.dataset.navigate) {navigate(target.dataset.navigate);return;}
   if (target.dataset.process) {
     const s=view().snapshot,p=s.processes.find(x=>x.pid===Number(target.dataset.process));
@@ -777,6 +853,9 @@ $('#content').addEventListener('click',async event=>{
   if(target.dataset.sessionAction){await handleSessionAction(target.dataset.sessionAction,Number(target.dataset.id));return;}
   switch(target.dataset.action){
     case 'retry': await poll();break;
+    case 'session-previous':sessionPageIndex=Math.max(0,sessionPageIndex-1);updateSessionArchive();break;
+    case 'session-next':sessionPageIndex++;updateSessionArchive();break;
+    case 'swap-comparison':comparisonIds={left:comparisonIds.right,right:comparisonIds.left};render({force:true});break;
     case 'close-process':processDetail=null;$('#process-detail').innerHTML='';break;
     case 'refresh-sessions':await action(async()=>{await refreshSessions();render({force:true});});break;
     case 'import-session':await action(async()=>{const id=await ipc('import_session');if(id!==null){await refreshSessions();render({force:true});toast(`Sessione importata: #${id}`);}});break;
@@ -829,6 +908,11 @@ $('#content').addEventListener('keydown',event=>{if((event.key==='Enter'||event.
 async function handleSessionAction(kind,id){
   const session=sessions.find(s=>s.id===id);
   if(!session)return;
+  if(kind==='compare-left'||kind==='compare-right'){
+    const side=kind==='compare-left'?'left':'right',other=side==='left'?'right':'left';
+    comparisonIds[side]=String(id);if(comparisonIds[other]===String(id))comparisonIds[other]='';
+    updateSessionArchive();return;
+  }
   if(kind==='replay'){
     await action(async()=>{
       const loaded=await ipc('load_session',{id});
@@ -841,7 +925,7 @@ async function handleSessionAction(kind,id){
     if(name)await action(async()=>{await ipc('rename_session',{id,name});await refreshSessions();if(replay?.summary.id===id)replay.summary.name=name;render({force:true});},'Sessione rinominata.');
   }else if(kind==='delete'){
     const confirmed=await ask({title:'Elimina sessione',description:`Eliminare “${session.name}” e tutti i campioni e benchmark collegati? Questa operazione è definitiva.`,confirm:'Elimina sessione',danger:true});
-    if(confirmed)await action(async()=>{await ipc('delete_session',{id});await refreshSessions();if(replay?.summary.id===id)replay=null;if(comparison?.left.id===id||comparison?.right.id===id)comparison=null;render({force:true});},'Sessione eliminata.');
+    if(confirmed)await action(async()=>{await ipc('delete_session',{id});await refreshSessions();if(replay?.summary.id===id)replay=null;if(comparison?.left.id===id||comparison?.right.id===id)comparison=null;for(const side of ['left','right'])if(String(comparisonIds[side])===String(id))comparisonIds[side]='';if(analysisSource===String(id)){analysisSource='live';analysisRevision++;}if(diagnosticsSource===String(id)){diagnosticsSource='live';diagnosticsRevision++;}render({force:true});},'Sessione eliminata.');
   }
 }
 // Read-only QA hooks allow the packaged WebView smoke test to inspect the live IPC result.

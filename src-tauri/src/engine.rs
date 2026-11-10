@@ -451,15 +451,7 @@ impl Worker {
         // Discovery reads local APIs only; synthetic inference is always opt-in.
         self.probe(&jobs_tx);
         while !self.stop.load(Ordering::Relaxed) {
-            if overflow.swap(false, Ordering::Relaxed) {
-                if let Some(id) = self.active.take() {
-                    let _ = self.store.interrupt_session(id);
-                }
-                self.update(|v| {
-                    v.active_session = None;
-                    v.error = Some("Archivio occupato oltre la capacità della coda: campioni mancanti; registrazione interrotta e marcata incompleta.".into());
-                });
-            }
+            self.handle_overflow(&overflow);
             while let Ok((inventory, sample)) = samples.try_recv() {
                 self.ingest(inventory, sample);
             }
@@ -494,6 +486,10 @@ impl Worker {
             }
             self.update(|v| v.error = Some(error));
         }
+        // The last provider call can overflow the queue after the loop's last
+        // check. The sender is now closed: all losses must be acknowledged before
+        // the recording is allowed to become complete.
+        self.handle_overflow(&overflow);
         while let Ok(job) = jobs_rx.try_recv() {
             self.job(job);
         }
@@ -509,6 +505,26 @@ impl Worker {
             }
         }
         self.update(|v| v.active_session = None);
+    }
+    fn handle_overflow(&mut self, overflow: &AtomicBool) {
+        if !overflow.swap(false, Ordering::Relaxed) {
+            return;
+        }
+        let interrupted = self
+            .active
+            .take()
+            .map(|id| self.store.interrupt_session(id));
+        self.update(|v| {
+            v.active_session = None;
+            let mut message = "Archivio occupato oltre la capacità della coda: campioni mancanti; registrazione interrotta e marcata incompleta.".to_owned();
+            if let Some(Err(error)) = interrupted {
+                message.push_str(&format!(" Aggiornamento stato non riuscito: {error}"));
+            }
+            if let Some(previous) = v.error.take() {
+                message.push_str(&format!(" {previous}"));
+            }
+            v.error = Some(message);
+        });
     }
     fn drain_samples(
         &mut self,
@@ -1181,6 +1197,37 @@ mod tests {
                 .is_err()
         );
         assert!(started.elapsed() < Duration::from_millis(500));
+        Ok(())
+    }
+    #[test]
+    fn shutdown_overflow_preserves_samples_but_never_marks_the_recording_complete() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let mut worker = worker_fixture(directory.path())?;
+        let (jobs, _) = mpsc::channel();
+        let id = worker
+            .handle(
+                Operation::Start("Closing with dropped samples".into()),
+                &jobs,
+            )?
+            .as_i64()
+            .unwrap();
+        let view = Arc::clone(&worker.view);
+        let (_requests, requests) = mpsc::sync_channel(1);
+        let (sender, samples) = mpsc::sync_channel(1);
+        sender.send((Inventory::default(), sample(20.0, 2.0)))?;
+        drop(sender);
+        worker.stop.store(true, Ordering::Relaxed);
+        worker.run(requests, samples, Arc::new(AtomicBool::new(true)));
+        let store = Store::open(&directory.path().join("fixture.sqlite3"))?;
+        assert_eq!(store.session_state(id)?, "incomplete");
+        assert_eq!(store.load_session(id, 10)?.total_samples, 2);
+        let view = view.read().unwrap();
+        assert!(view.active_session.is_none());
+        assert!(
+            view.error
+                .as_deref()
+                .is_some_and(|e| e.contains("campioni mancanti"))
+        );
         Ok(())
     }
     #[test]

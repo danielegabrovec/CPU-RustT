@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0 — 10 novembre 2026
+
+- Archivio con ricerca per nome/ID, filtro dello stato e pagine da 25 sessioni.
+- Assegnazione A/B nell'archivio, scambio dei lati e indicazione esplicita del confronto da ricalcolare.
+- Intestazioni ordinabili dei processi, stato accessibile dell'ordinamento e navigazione rapida delle viste con Ctrl+K.
+- Scorrimento delle tabelle e focus conservati durante gli aggiornamenti; adattamenti per finestre strette e temi.
+- Avvisi CPU/RAM/VRAM escludono valori incoerenti senza consumare il cooldown delle misure valide.
+- Import di sessioni interrotte o aperte conserva lo stato incompleto; conteggi troncati/incoerenti vengono rifiutati senza modificare l'archivio.
+- Chiusura: un overflow finale della coda non può dichiarare completa una registrazione con campioni mancanti.
+- Test nativi estesi a ricerca, ordinamento, filtri, chiusura durante registrazione e riapertura dello stesso archivio.
+
 ## 0.1.1 — seconda revisione e prima release pubblica
 
 - Export coerenti con pausa/replay e report analitico visualizzato.

@@ -1,4 +1,4 @@
-CPU-RustT 0.1.1 - THIRD-PARTY NOTICES
+CPU-RustT 0.2.0 - THIRD-PARTY NOTICES
 
 Ideazione, struttura e sviluppo dell'applicazione: Daniele Gabrovec.
 

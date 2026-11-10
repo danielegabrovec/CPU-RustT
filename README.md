@@ -25,8 +25,8 @@ Scaricare da **[GitHub Releases](https://github.com/danielegabrovec/CPU-RustT/re
 
 | Pacchetto | Uso |
 |---|---|
-| `CPU-RustT_0.1.1_x64-setup.exe` | Installer per l'utente corrente e menu Start. |
-| `CPU-RustT_0.1.1_windows-x64.zip` | Estrarre tutto e aprire `CPU-RustT.exe`. |
+| `CPU-RustT_0.2.0_x64-setup.exe` | Installer per l'utente corrente e menu Start. |
+| `CPU-RustT_0.2.0_windows-x64.zip` | Estrarre tutto e aprire `CPU-RustT.exe`. |
 | `CPU-RustT.exe` | Eseguibile diretto; licenze consultabili nell'app. |
 | `SHA256SUMS.txt` | Impronte dei pacchetti pubblicati. |
 
@@ -39,6 +39,17 @@ la CI verifica separatamente il core Linux.
 2. Esplorare CPU, GPU e processi; i valori assenti restano non disponibili.
 3. Premere **Registra sessione** prima di un lavoro e arrestare al termine.
 4. Aprire **Analisi dati** o **Confronto A/B** per esaminare la registrazione.
+
+## Novità della versione 0.2.0
+
+- Cerca viste con **Ctrl+K** e apri il primo risultato con **Invio**.
+- Cerca sessioni per nome o ID, filtra lo stato e sfoglia pagine da 25 righe.
+- Assegna A/B direttamente nell'archivio, scambia i lati e riconosci quando
+  il confronto visibile deve essere ricalcolato.
+- Ordina i processi dalle intestazioni, anche da tastiera; lo scorrimento
+  orizzontale delle tabelle resta conservato durante i refresh.
+- Import e chiusura mantengono lo stato incompleto delle registrazioni;
+  i contatori incoerenti non producono falsi avvisi di pressione hardware.
 
 ## Funzioni
 
@@ -58,6 +69,9 @@ la CI verifica separatamente il core Linux.
   controlli da tastiera e informazioni su autore e licenze offline.
 
 ![Statistiche con dati dimostrativi](docs/screenshots/analysis.png)
+
+Altre viste della 0.2: [Archivio sessioni](docs/screenshots/sessions.png) ·
+[Processi](docs/screenshots/processes.png) · [Confronto A/B](docs/screenshots/compare.png).
 
 ## Misure e dati locali
 
@@ -102,7 +116,7 @@ nativo locale resta distinto dalla CI. [Sviluppo](docs/SVILUPPO.md) ·
 
 [Manuale](docs/MANUALE.md) · [Analisi e diagnostica](docs/ANALISI.md) ·
 [Hardware](docs/HARDWARE.md) · [Architettura](docs/ARCHITETTURA.md) ·
-[Secondo audit](docs/AUDIT-SECONDO-GIRO.md) · [Changelog](CHANGELOG.md) ·
+[Revisione 0.2 e piano](docs/AUDIT-0.2.md) · [Secondo audit](docs/AUDIT-SECONDO-GIRO.md) · [Changelog](CHANGELOG.md) ·
 [Autore e licenze](docs/INFORMAZIONI-LEGALI.md).
 
 Codice originale: [MIT](LICENSE). Componenti terzi:

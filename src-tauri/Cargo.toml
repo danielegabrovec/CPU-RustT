@@ -1,6 +1,6 @@
 [package]
 name = "cpu-rustt"
-version = "0.1.1"
+version = "0.2.0"
 description = "Monitor hardware desktop locale con Tauri e Rust"
 authors = ["Daniele Gabrovec"]
 edition = "2024"

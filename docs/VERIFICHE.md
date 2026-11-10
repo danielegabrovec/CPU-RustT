@@ -1,3 +1,57 @@
+# Verifiche della release 0.2.0
+
+Data: 10 novembre 2026. Piattaforma desktop: Windows x64, WebView2 reale.
+Questa sezione riporta le prove eseguite sul codice e sui pacchetti 0.2.0;
+la sezione 0.1.1 sotto resta come archivio storico.
+
+| Gate locale | Esito |
+|---|---|
+| Sintassi JavaScript, asset locali, metadati e versioni | Passato. |
+| Rustfmt workspace e Clippy `-D warnings` | Passati. |
+| Core Rust | **133 test unitari + 6 CLI passati**. |
+| Backend desktop | **21 test passati**, inclusa la prova hardware esplicita. |
+| Totale Rust | **160 passati**, nessuno ignorato nella verifica finale. |
+| Frontend sintetico | **16 gruppi passati**, zero errori JavaScript. |
+| Eseguibile finale portabile | **21 controlli nativi passati**, nessuno saltato. |
+| Eseguibile estratto dal vero installer | **21 controlli nativi passati**, nessuno saltato. |
+| Installazione e disinstallazione isolate | Exit code 0, registrazione rimossa, database QA conservato. |
+| Identità e licenze | SHA-256 installato uguale al portabile; LICENSE e avvisi identici. |
+| ZIP portabile | Quattro file previsti; eseguibile e licenze identici ai sorgenti del pacchetto. |
+
+I nuovi controlli coprono Ctrl+K, ricerca e filtri delle sessioni, assegnazione
+A/B, ordinamento da intestazioni con aria-sort, chiusura durante registrazione,
+integrità SQLite, riapertura dello stesso archivio e preferenze conservate.
+La prova di riapertura richiede uscita pulita, nessuna sessione rimasta open,
+stato complete della registrazione interrotta dall'uscita, numero di campioni
+non ridotto e `PRAGMA quick_check = ok`. Il percorso del database è controllato
+prima delle mutazioni e della chiusura: vengono toccati solo i processi QA.
+
+Le regressioni Rust aggiunte verificano contatori incoerenti senza falsi avvisi,
+conservazione dello stato incompleto in import, rifiuto atomico di payload con
+conteggi dichiarati nonzero discordanti o stato sconosciuto, e overflow finale
+della coda con campioni conservati e registrazione dichiarata incompleta.
+I conteggi zero legacy restano non specificati per compatibilità.
+
+Galleria pubblica rigenerata con fixture e watermark; nessun campione reale
+pubblicato. Verificati anche archivio/processi a 760×580 in chiaro e scuro,
+assi e tooltip a 375/760/960/1440 e label dei grafici almeno 14 px. Nella finestra
+minima le tabelle si raggiungono con lo scorrimento del contenuto.
+
+Evidenze locali escluse da Git: `test-output/verify-rust-0.2.0.log`,
+`build-0.2.0.log`, `native-0.2.0.log`, `installer-0.2.0.log`, report delle
+fixture e delle esecuzioni native. Il manifest pubblico contiene solo esiti,
+conteggi e hash dei pacchetti. La CI del commit pubblicato è consultabile in
+[GitHub Actions](https://github.com/danielegabrovec/CPU-RustT/actions/workflows/ci.yml).
+
+Il setup resta **non firmato**. Non sono state provate una VM Windows pulita,
+nuove famiglie hardware, guasti driver reali, macOS o Linux desktop. Linux è
+verificato separatamente dalla CI per core e CLI. Una compilazione o una fixture
+non sostituisce una prova fisica dei provider opzionali.
+
+Piano e problemi corretti: [Revisione 0.2](AUDIT-0.2.md).
+
+---
+
 # Verifiche della release 0.1.1
 
 Data: 8 novembre 2026. Piattaforma desktop verificata: Windows x64.

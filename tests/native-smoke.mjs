@@ -119,6 +119,17 @@ export async function runNativeSmoke({ cdpUrl = 'http://127.0.0.1:9223', outputD
       }
       return { routes };
     });
+    await check('quick navigation search is reachable by keyboard', async () => {
+      await page.keyboard.press('Control+k');
+      await expect(page.locator('#navigation-search')).toBeFocused();
+      await page.locator('#navigation-search').fill('Processi');
+      await expect(page.locator('.nav-item[data-route="processes"]')).toBeVisible();
+      await expect(page.locator('.nav-item[data-route="overview"]')).toBeHidden();
+      await page.locator('#navigation-search').press('Enter');
+      await expect(page.locator('#content')).toHaveAttribute('data-route', 'processes');
+      await expect(page.locator('#navigation-search')).toHaveValue('');
+      await screenshot('quick-navigation');
+    });
     await check('process search, sorting and fixed detail', async () => {
       await navigate('processes');
       await page.locator('#process-search').fill('QA-no-such-process-5ec694');
@@ -141,6 +152,22 @@ export async function runNativeSmoke({ cdpUrl = 'http://127.0.0.1:9223', outputD
       await page.locator('[data-action="close-process"]').click();
       await page.locator('#process-search').fill('');
       return { count: pids.length, selectedPid: pid };
+    });
+    await check('process table headers sort and announce their direction', async () => {
+      await navigate('processes');
+      await page.locator('.sort-button[data-sort="Cpu"]').click();
+      await expect(page.locator('#process-sort')).toHaveValue('Cpu');
+      await expect(page.locator('.sort-button[data-sort="Cpu"]').locator('xpath=ancestor::th[1]')).toHaveAttribute('aria-sort', /^(ascending|descending)$/);
+      await page.locator('.sort-button[data-sort="Pid"]').click();
+      const heading = page.locator('.sort-button[data-sort="Pid"]').locator('xpath=ancestor::th[1]');
+      await expect(heading).toHaveAttribute('aria-sort', /^(ascending|descending)$/);
+      const direction = await heading.getAttribute('aria-sort');
+      const pids = await page.locator('#process-table [data-process]').evaluateAll(rows => rows.map(row => Number(row.dataset.process)));
+      assert(pids.length > 0);
+      assert.deepEqual(pids, [...pids].sort((a, b) => direction === 'ascending' ? a - b : b - a));
+      await page.locator('.sort-button[data-sort="Pid"]').press('Enter');
+      await expect(heading).toHaveAttribute('aria-sort', direction === 'ascending' ? 'descending' : 'ascending');
+      return { processes: pids.length, firstDirection: direction };
     });
     await check('pause freezes only the view', async () => {
       await navigate('overview');
@@ -198,6 +225,36 @@ export async function runNativeSmoke({ cdpUrl = 'http://127.0.0.1:9223', outputD
     await check('record second QA session', async () => {
       await recordSession('B');
       return await stopOwnSession();
+    });
+    await check('session archive filters and direct A/B selection match saved recordings', async () => {
+      await navigate('sessions');
+      const rows = page.locator('[data-session-action="replay"]');
+      await expect(rows).toHaveCount(2);
+      await page.locator('#session-search').fill('QA-no-matching-session-4fd2');
+      await expect(rows).toHaveCount(0);
+      await page.locator('#session-search').fill(report.sessions[0].name);
+      await expect(rows).toHaveCount(1);
+      await expect(rows).toHaveAttribute('data-id', String(report.sessions[0].id));
+      await page.locator('#session-state').selectOption('recording');
+      await expect(rows).toHaveCount(0);
+      await page.locator('#session-state').selectOption('complete');
+      await expect(rows).toHaveCount(1);
+      await page.locator('#session-state').selectOption('incomplete');
+      await expect(rows).toHaveCount(0);
+      await page.locator('#session-state').selectOption('all');
+      await page.locator('#session-search').fill(`#${report.sessions[1].id}`);
+      await expect(rows).toHaveCount(1);
+      await expect(rows).toHaveAttribute('data-id', String(report.sessions[1].id));
+      await screenshot('archive-filtered');
+      await page.locator('#session-search').fill('');
+      await expect(rows).toHaveCount(2);
+      await page.locator(`[data-session-action="compare-left"][data-id="${report.sessions[0].id}"]`).click();
+      await page.locator(`[data-session-action="compare-right"][data-id="${report.sessions[1].id}"]`).click();
+      await page.locator('[data-navigate="compare"]').click();
+      await expect(page.locator('#content')).toHaveAttribute('data-route', 'compare');
+      await expect(page.locator('#compare-left')).toHaveValue(String(report.sessions[0].id));
+      await expect(page.locator('#compare-right')).toHaveValue(String(report.sessions[1].id));
+      return { savedRecordings: 2, searchedBy: ['name', 'id'], states: ['all', 'complete', 'incomplete', 'recording'], directComparisonSelection: true };
     });
     await check('replay and scrub recorded samples', async () => {
       assert.equal(report.sessions.length, 2);

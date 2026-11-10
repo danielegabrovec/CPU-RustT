@@ -13,7 +13,7 @@ Per avviare la versione pronta all'uso dalla cartella del progetto:
 ```
 
 L'installer per l'utente corrente si trova in
-`artifacts\CPU-RustT_0.1.1_x64-setup.exe`. L'app richiede Microsoft Edge WebView2.
+`artifacts\CPU-RustT_0.2.0_x64-setup.exe`. L'app richiede Microsoft Edge WebView2.
 L'eseguibile è utilizzabile senza installare Rust, Node.js o un server SQLite.
 Il setup non è firmato digitalmente.
 
@@ -45,6 +45,35 @@ Per interrompere il salvataggio usare il pulsante di arresto registrazione.
 Il replay mostra dati archiviati ed è distinto dalla vista live. Il confronto
 usa le statistiche di tutti i campioni; le serie visualizzate possono essere
 anteprime distribuite sull'intera sessione.
+
+## Trovare viste, processi e registrazioni
+
+Premere **Ctrl+K** per raggiungere **Cerca vista** nella barra laterale. Digitare
+un nome o argomento, premere **Invio** per il primo risultato; **Esc** cancella
+la ricerca e riporta il focus al contenuto. I dialoghi aperti mantengono la propria
+gestione del focus.
+
+Nei **Processi**, premere le intestazioni Processo, PID, CPU e RAM per ordinare.
+Ripetere per invertire il verso; la freccia e lo stato accessibile della colonna
+indicano la direzione. Gli stessi pulsanti si usano con Tab e Invio/Spazio.
+**Ricorda ordine** salva la preferenza per il prossimo avvio.
+
+Nelle **Sessioni**, la ricerca trova nome o ID (per esempio `#12`) e il filtro
+separa completate, interrotte e in registrazione. La lista mostra 25 righe per
+pagina; i filtri valgono per l'elenco caricato, fino al limite backend di 1000
+sessioni. La ricerca e lo stato scelti si conservano durante la navigazione.
+Premere **A** e **B** su due righe diverse, poi **Apri confronto A/B**.
+
+Nel **Confronto A/B**, **Scambia A ↔ B** prepara il verso opposto; premere
+**Confronta sessioni** per calcolarlo. Se i selettori cambiano dopo un calcolo,
+un avviso indica che il risultato precedente resta visibile e ne riporta le
+origini. I delta del risultato visualizzato sono sempre B meno A.
+
+Un import di sessione interrotta resta interrotto; una copia esportata durante
+una registrazione viene importata come incompleta. I JSON con conteggi dichiarati
+non nulli incoerenti o troncati vengono rifiutati prima di modificare l'archivio.
+Per compatibilità, i conteggi zero dei formati precedenti valgono come non specificati. Per
+trasferire una sessione usare **Esporta**, senza salvare l'anteprima del replay.
 
 ## Esplorare grafici, statistiche e problemi
 

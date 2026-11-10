@@ -46,7 +46,9 @@ node tests/run-native.mjs --exe src-tauri/target/debug/cpu-rustt.exe
 Il runner avvia un processo di prova, sceglie una porta loopback temporanea
 per WebView2 e crea dati sotto `test-output/native-runs`. Verifica il percorso
 prima di modificare l'archivio e chiude soltanto il proprio processo al termine.
-I risultati e gli screenshot reali restano esclusi da Git.
+I risultati e gli screenshot reali restano esclusi da Git. Il runner verifica anche
+la chiusura normale durante una registrazione, l’integrità SQLite e la riapertura
+dello stesso archivio con sessioni e preferenze conservate.
 
 Il benchmark CPU è confermato nel dialogo; non viene avviato un benchmark LLM.
 `npm run test:native:attach` è il livello inferiore per una WebView di prova

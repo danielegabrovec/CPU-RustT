@@ -828,6 +828,23 @@ impl Store {
         {
             bail!("Import oltre i limiti (50000 campioni / 10000 eventi).");
         }
+        // Replay previews are not complete exports. Never silently turn a subset
+        // into an apparently complete recording during an import.
+        let actual_samples = data.samples.len() as u64;
+        for declared in [data.total_samples, data.summary.samples] {
+            if declared != 0 && declared != actual_samples {
+                bail!(
+                    "Import incompleto: il numero di campioni dichiarato ({declared}) non corrisponde ai campioni presenti ({actual_samples}). Usare l'esportazione completa della sessione."
+                );
+            }
+        }
+        let state = match data.summary.state.as_str() {
+            "" | "complete" => "complete",
+            // An exported running recording is an incomplete copy, not a new
+            // live recording owned by the importing process.
+            "open" | "incomplete" => "incomplete",
+            _ => bail!("Stato della sessione importata non riconosciuto"),
+        };
         data.summary.name = if data.summary.name.trim().is_empty() {
             "Sessione importata".into()
         } else {
@@ -844,7 +861,7 @@ impl Store {
         let interval_ms = i64::try_from(interval_ms).context("Intervallo sessione non valido")?;
         let imported_utc = chrono::Utc::now().to_rfc3339();
         let tx = self.connection.transaction()?;
-        tx.execute("INSERT INTO sessions(name,started_utc,ended_utc,state,interval_ms,app_version,inventory_json) VALUES(?1,?2,?3,'complete',?4,?5,?6)",params![data.summary.name,if data.summary.started_utc.is_empty(){imported_utc.clone()}else{data.summary.started_utc.clone()},data.summary.ended_utc.filter(|v| !v.is_empty()).unwrap_or_else(|| imported_utc.clone()),interval_ms,data.summary.app_version,serde_json::to_string(&data.inventory)?])?;
+        tx.execute("INSERT INTO sessions(name,started_utc,ended_utc,state,interval_ms,app_version,inventory_json) VALUES(?1,?2,?3,?4,?5,?6,?7)",params![data.summary.name,if data.summary.started_utc.is_empty(){imported_utc.clone()}else{data.summary.started_utc.clone()},data.summary.ended_utc.filter(|v| !v.is_empty()).unwrap_or_else(|| imported_utc.clone()),state,interval_ms,data.summary.app_version,serde_json::to_string(&data.inventory)?])?;
         let id = tx.last_insert_rowid();
         for sample in data.samples {
             insert_sample(&tx, id, &sample)?;
@@ -1497,6 +1514,67 @@ mod tests {
                 .interval_ms,
             1000
         );
+    }
+    #[test]
+    fn imported_interrupted_and_running_recordings_are_never_marked_complete() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = Store::open(&dir.path().join("archive.db")).unwrap();
+        for (index, state) in ["open", "incomplete", "complete"].into_iter().enumerate() {
+            let id = store
+                .begin_session("Original", &Inventory::default(), 1000)
+                .unwrap();
+            store.append_sample(id, &sample(25.0, 0.0)).unwrap();
+            match state {
+                "incomplete" => store.interrupt_session(id).unwrap(),
+                "complete" => store.finish_session(id).unwrap(),
+                _ => {}
+            }
+            let path = dir.path().join(format!("state-{index}.json"));
+            store.export_session(id, &path).unwrap();
+            let imported = store.import_session(&path).unwrap();
+            assert_eq!(
+                store.session_state(imported).unwrap(),
+                if state == "complete" {
+                    "complete"
+                } else {
+                    "incomplete"
+                }
+            );
+            assert_eq!(store.load_session(imported, 10).unwrap().total_samples, 1);
+        }
+    }
+    #[test]
+    fn truncated_or_inconsistent_imports_are_rejected_without_committing_a_session() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = Store::open(&dir.path().join("archive.db")).unwrap();
+        let id = store
+            .begin_session("Original", &Inventory::default(), 1000)
+            .unwrap();
+        store.append_sample(id, &sample(25.0, 0.0)).unwrap();
+        store.append_sample(id, &sample(50.0, 1.0)).unwrap();
+        store.finish_session(id).unwrap();
+        let path = dir.path().join("complete.json");
+        store.export_session(id, &path).unwrap();
+        let value: serde_json::Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+        let mut variants = Vec::new();
+        let mut truncated = value.clone();
+        truncated["samples"].as_array_mut().unwrap().pop();
+        variants.push(truncated);
+        let mut incorrect_total = value.clone();
+        incorrect_total["total_samples"] = 1.into();
+        variants.push(incorrect_total);
+        let mut incorrect_summary = value.clone();
+        incorrect_summary["summary"]["samples"] = 1.into();
+        variants.push(incorrect_summary);
+        let mut unknown_state = value;
+        unknown_state["summary"]["state"] = "unknown".into();
+        variants.push(unknown_state);
+        for (index, value) in variants.into_iter().enumerate() {
+            let path = dir.path().join(format!("invalid-copy-{index}.json"));
+            fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
+            assert!(store.import_session(&path).is_err());
+            assert_eq!(store.list_sessions(10).unwrap().len(), 1);
+        }
     }
     #[test]
     fn snapshot_import_preserves_capture_time() {

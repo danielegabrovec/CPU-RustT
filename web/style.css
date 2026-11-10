@@ -168,3 +168,26 @@ td { padding: 13px 11px; }
   .about-content { padding: 19px; }
   .about-content p { font-size: 13px; }
 }
+
+/* Search and archive tools share the existing local-monitor design tokens. */
+.navigation-search { padding: 0 5px 12px; flex-shrink: 0; }
+.navigation-search input { font-size: 12px; min-height: 37px; background: var(--surface); }
+.navigation-empty { color: var(--muted); font-size: 12px; padding: 0 9px; }
+.archive-summary, .pagination { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: 12px; color: var(--muted); }
+.archive-summary { margin: 0 0 16px; }
+.archive-summary > :nth-child(2) { margin-left: auto; }
+.pagination { justify-content: flex-end; border-top: 1px solid var(--border); padding-top: 16px; margin-top: 12px; }
+.archive-empty { padding: 24px 12px; text-align: center; color: var(--muted); font-size: 13px; }
+.sort-button { min-height: 32px; display: inline-flex; align-items: center; gap: 6px; padding: 4px 0; }
+th[aria-sort=ascending], th[aria-sort=descending] { color: var(--accent); }
+.session-actions { gap: 6px; }
+.session-actions [aria-pressed=true] { background: var(--accent-dim); }
+.button:disabled { cursor: not-allowed; }
+.table-wrap { scrollbar-width: thin; scrollbar-color: var(--subtle) var(--surface-alt); }
+@media(max-width:650px) {
+  .navigation-search { padding: 0 0 10px; max-width: 360px; }
+  .navigation-search input { font-size: 13px; min-height: 40px; }
+  .archive-summary { align-items: flex-start; }
+  .archive-summary > :nth-child(2) { margin-left: 0; }
+  .pagination { justify-content: space-between; gap: 8px; }
+}

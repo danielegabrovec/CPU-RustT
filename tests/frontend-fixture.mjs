@@ -70,7 +70,7 @@ function installSyntheticFixture() {
     ollama_url:'http://127.0.0.1:11434',lm_studio_url:'http://127.0.0.1:1234',llama_cpp_url:'http://127.0.0.1:8080'};
   const metric={average:42,peak:75,p95:68};
   const summary={id:1,name:'Sessione A · dati dimostrativi',started_utc:'2026-11-08T10:00:00Z',
-    ended_utc:'2026-11-08T10:01:30Z',state:'finished',samples:180,duration_secs:89.5,
+    ended_utc:'2026-11-08T10:01:30Z',state:'complete',samples:180,duration_secs:89.5,
     cpu:metric,ram:{average:18*GiB,peak:22*GiB,p95:21.5*GiB},gpu:metric,
     vram:{average:6*GiB,peak:7*GiB,p95:6.9*GiB},llm_ram:metric,benchmark_count:1};
   const benchmark={id:1,session_id:1,recorded_utc:'2026-11-08T10:00:30Z',kind:'cpu',
@@ -137,7 +137,7 @@ function installSyntheticFixture() {
       case'stop_recording':state.active_session=null;return null;
       case'load_session':return {summary:fixture.sessions.find(s=>s.id===args.id),inventory:state.inventory,
         samples:state.history.map(s=>({...s,processes:s.processes.filter(p=>p.is_llm)})),total_samples:180,benchmarks:[benchmark],alerts:[]};
-      case'compare_sessions':return {left:fixture.sessions[0],right:fixture.sessions[1],metrics:[
+      case'compare_sessions':return {left:fixture.sessions.find(s=>s.id===args.left),right:fixture.sessions.find(s=>s.id===args.right),metrics:[
         {label:'Carico CPU medio',unit:'%',left:42,right:38,delta:-4,delta_percent:-9.52},
         {label:'RAM media',unit:'B',left:18*GiB,right:16*GiB,delta:-2*GiB,delta_percent:-11.11}],
         warnings:['Confronto sintetico: non descrive prestazioni di hardware reale.'],left_series:state.history,right_series:state.history,benchmarks:[]};
@@ -148,7 +148,7 @@ function installSyntheticFixture() {
       case'import_session':return null;
       case'export_session':case'export_snapshot':case'export_analysis':case'backup_database':return 'C:\\Demo\\CPU-RustT\\exports\\report-dimostrativo.json';
       case'refresh_llm':return null;
-      case'app_info':return {name:'CPU-RustT',version:'0.1.1',author:'Daniele Gabrovec',copyright:'© 2026 Daniele Gabrovec',license:'MIT',
+      case'app_info':return {name:'CPU-RustT',version:'0.2.0',author:'Daniele Gabrovec',copyright:'© 2026 Daniele Gabrovec',license:'MIT',
         repository:'https://github.com/danielegabrovec/CPU-RustT',third_party_notices:'DATI DIMOSTRATIVI · il test sostituisce soltanto la lettura del file.\nMIT License\nTesto sintetico per verificare scorrimento e copia.'};
       default:throw new Error(`Comando fixture non implementato: ${command}`);
     }
@@ -178,6 +178,78 @@ try{
     assert.equal(await page.locator('#process-table tbody tr').count(),1);
     assert((await page.locator('#process-table').innerText()).includes('batch <demo>'));
     assert((await page.locator('#process-table').innerText()).includes('0,5 B/s'));
+  });
+  await check('Ricerca viste da tastiera, nessun risultato e ripristino navigazione',async()=>{
+    await page.keyboard.press('Control+k');assert(await page.locator('#navigation-search').evaluate(node=>node===document.activeElement));
+    await page.locator('#navigation-search').fill('schede grafiche');
+    assert.equal(await page.locator('.nav-item:not([hidden])').count(),1);
+    await page.keyboard.press('Enter');assert.equal(await page.locator('#content').getAttribute('data-route'),'gpu');
+    assert.equal(await page.locator('#navigation-search').inputValue(),'');
+    await page.keyboard.press('Control+k');await page.locator('#navigation-search').fill('non-esiste-una-vista');
+    assert(await page.locator('#navigation-empty').isVisible());await page.keyboard.press('Enter');
+    assert.equal(await page.locator('#content').getAttribute('data-route'),'gpu');
+    await page.keyboard.press('Escape');assert.equal(await page.locator('.nav-item:not([hidden])').count(),14);
+  });
+  await check('Colonne processi ordinabili, aria-sort e scroll preservato al refresh',async()=>{
+    await go('processes');await page.locator('#process-search').fill('');
+    await page.locator('[data-sort="Cpu"]').click();
+    assert.equal(await page.locator('th').filter({has:page.locator('[data-sort="Cpu"]')}).getAttribute('aria-sort'),'ascending');
+    assert((await page.locator('#process-table tbody tr').first().innerText()).includes('monitor-demo.exe'));
+    await page.locator('[data-sort="Memory"]').focus();await page.keyboard.press('Enter');
+    assert.equal(await page.locator('#process-sort').inputValue(),'Memory');
+    assert.equal(await page.locator('th').filter({has:page.locator('[data-sort="Memory"]')}).getAttribute('aria-sort'),'descending');
+    assert((await page.locator('#process-table tbody tr').first().innerText()).includes('ollama-demo.exe'));
+    await page.setViewportSize({width:760,height:580});
+    await page.locator('#process-table .table-wrap').evaluate(node=>node.scrollLeft=170);
+    await poll();assert((await page.locator('#process-table .table-wrap').evaluate(node=>node.scrollLeft))>=160);
+    await page.setViewportSize({width:1440,height:1000});
+    await page.locator('[data-sort="Cpu"]').click();
+  });
+  await check('Archivio cercabile, stati italiani, pagine limitate e filtri combinati',async()=>{
+    await page.evaluate(()=>{
+      fixture.savedSessions=structuredClone(fixture.sessions);
+      fixture.sessions=Array.from({length:62},(_,i)=>({...structuredClone(fixture.savedSessions[0]),id:i+1,name:`Lavoro ${i+1}`,state:i%2?'incomplete':'complete'}));
+      fixture.state.active_session=62;
+    });await go('sessions');await page.locator('[data-action="refresh-sessions"]').click();await page.waitForTimeout(80);
+    assert.equal(await page.locator('#session-archive tbody tr').count(),25);
+    assert((await page.locator('#session-count').innerText()).includes('1–25 di 62'));
+    assert((await page.locator('#session-archive').innerText()).includes('Completata'));
+    assert((await page.locator('#session-archive').innerText()).includes('Interrotta'));
+    await page.locator('[data-action="session-next"]').click();
+    assert((await page.locator('#session-count').innerText()).includes('26–50 di 62'));
+    await poll();assert((await page.locator('#session-count').innerText()).includes('26–50 di 62'));
+    await page.locator('#session-search').fill('#62');
+    assert.equal(await page.locator('#session-archive tbody tr').count(),1);
+    assert((await page.locator('#session-archive').innerText()).includes('In registrazione'));
+    await page.selectOption('#session-state','complete');assert.equal(await page.locator('#session-archive tbody tr').count(),0);
+    assert((await page.locator('#session-archive').innerText()).includes('Nessuna sessione corrisponde'));
+    await page.selectOption('#session-state','recording');assert.equal(await page.locator('#session-archive tbody tr').count(),1);
+    await page.locator('#session-search').fill('');await page.selectOption('#session-state','incomplete');
+    assert((await page.locator('#session-count').innerText()).includes('di 30'));
+    await page.locator('#session-search').fill('LAVORO 2');
+    assert((await page.locator('#session-count').innerText()).includes('6'));
+    await page.evaluate(()=>{fixture.sessions=fixture.savedSessions;fixture.state.active_session=null;});
+    await page.locator('#session-search').fill('');await page.selectOption('#session-state','all');
+    await page.locator('[data-action="refresh-sessions"]').click();await page.waitForTimeout(80);
+  });
+  await check('Selezione A/B dall’archivio e contesto confronto distinto dai selettori',async()=>{
+    await go('sessions');await page.locator('[data-session-action="compare-left"][data-id="1"]').click();
+    assert(await page.locator('[data-navigate="compare"]').isDisabled());
+    await page.locator('[data-session-action="compare-right"][data-id="2"]').click();
+    assert.equal(await page.locator('[data-session-action="compare-left"][data-id="1"]').getAttribute('aria-pressed'),'true');
+    await page.locator('[data-navigate="compare"]').click();
+    assert.equal(await page.locator('#compare-left').inputValue(),'1');assert.equal(await page.locator('#compare-right').inputValue(),'2');
+    await page.locator('#compare-form button[type="submit"]').click();await page.waitForTimeout(80);
+    assert((await page.locator('#comparison-context').innerText()).includes('Confronto visualizzato'));
+    await page.selectOption('#compare-left','2');
+    assert((await page.locator('#comparison-context').innerText()).includes('risultato precedente'));
+    assert((await page.locator('#comparison-context').innerText()).includes('A: #1'));
+    await page.selectOption('#compare-left','1');await page.locator('[data-action="swap-comparison"]').click();
+    assert.equal(await page.locator('#compare-left').inputValue(),'2');assert.equal(await page.locator('#compare-right').inputValue(),'1');
+    await page.locator('#compare-form button[type="submit"]').click();await page.waitForTimeout(80);
+    assert((await page.locator('#comparison-context').innerText()).includes('A: #2'));
+    await go('sessions');await page.locator('[data-session-action="compare-left"][data-id="1"]').click();
+    assert(await page.locator('[data-navigate="compare"]').isDisabled());
   });
   await check('32 thread, ripetizioni persistenti e campioni a 500 ms distinti',async()=>{
     await go('cpu');assert.equal(await page.locator('#cpu-series option').count(),33);
@@ -243,7 +315,7 @@ try{
     const old=await page.locator('.section-context').innerText();await page.evaluate(()=>fixture.advance(1));await poll();
     assert.notEqual(await page.locator('.section-context').innerText(),old);
     await go('compare');await page.selectOption('#compare-left','1');await page.selectOption('#compare-right','2');
-    await page.locator('#compare-form button').click();await page.waitForTimeout(70);
+    await page.locator('#compare-form button[type="submit"]').click();await page.waitForTimeout(70);
     assert((await page.locator('#content').innerText()).includes('−2,0 GiB'));
     await go('cpu');await page.locator('[data-action="cpu-benchmark"]').click();assert(await page.locator('#action-dialog').isVisible());
     const before=(await page.evaluate(()=>fixture.calls.filter(c=>c.command==='run_cpu_benchmark').length));await page.locator('#dialog-cancel').click();
@@ -298,7 +370,7 @@ try{
   await check('Informazioni autore, licenze offline e caricamento una sola volta',async()=>{
     await page.locator('#about-button').click();await page.waitForTimeout(70);
     assert((await page.locator('#about-dialog').innerText()).includes('Ideazione, struttura e sviluppo: Daniele Gabrovec'));
-    assert((await page.locator('#about-version').innerText()).includes('0.1.1'));
+    assert((await page.locator('#about-version').innerText()).includes('0.2.0'));
     await page.locator('.license-details summary').click();assert((await page.locator('#about-notices').inputValue()).includes('MIT License'));
     await page.keyboard.press('Escape');assert(!(await page.locator('#about-dialog').isVisible()));
     await page.locator('#about-button').click();await page.waitForTimeout(40);await page.locator('#about-close').click();
@@ -372,15 +444,22 @@ try{
       document.body.append(mark);document.querySelector('#toast').hidden=true;
       fixture.state.preferences.theme_light=false;
     });await poll();
-    for(const route of ['overview','cpu','gpu','analysis','diagnostics']){
+    for(const route of ['overview','cpu','gpu','analysis','diagnostics','processes','sessions','compare']){
       await go(route);
       if(route==='cpu')await page.selectOption('#cpu-series','31');
       if(route==='gpu')await page.selectOption('#gpu-adapter','all');
+      if(route==='sessions'){await page.locator('[data-session-action="compare-left"][data-id="1"]').click();await page.locator('[data-session-action="compare-right"][data-id="2"]').click();}
       if(route==='analysis'){await page.selectOption('#analysis-source','live');await page.locator('#analysis-refresh').click();await page.waitForTimeout(70);}
       await page.screenshot({path:path.join(gallery,`${route}.png`),fullPage:false});
     }
     await page.locator('#about-button').click();await page.waitForTimeout(70);
     await page.screenshot({path:path.join(gallery,'about.png'),fullPage:false});await page.locator('#about-close').click();
+    await page.setViewportSize({width:760,height:580});
+    for(const theme of ['dark','light']){
+      await page.evaluate(theme=>{fixture.state.preferences.theme_light=theme==='light';},theme);await poll();
+      for(const route of ['sessions','processes']){await go(route);await page.screenshot({path:path.join(output,`${route}-760-${theme}.png`),fullPage:false});}
+    }
+    await page.evaluate(()=>{fixture.state.preferences.theme_light=false;});await poll();
     await page.setViewportSize({width:375,height:1000});await go('overview');await page.screenshot({path:path.join(gallery,'responsive.png'),fullPage:false});
   }
   assert.deepEqual(pageErrors,[]);

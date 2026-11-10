@@ -18,7 +18,9 @@
         <span>CPU-RustT<small>HARDWARE INSIGHT</small></span>
       </a>
       <div class="nav-label">MONITORAGGIO</div>
-      <nav id="navigation"></nav>
+      <div class="navigation-search"><label class="sr-only" for="navigation-search">Cerca una vista · Ctrl+K</label><input id="navigation-search" type="search" placeholder="Cerca vista · Ctrl+K" autocomplete="off" aria-controls="navigation" aria-keyshortcuts="Control+k"></div>
+      <nav id="navigation" aria-label="Viste del monitor"></nav>
+      <p id="navigation-empty" class="navigation-empty" role="status" hidden>Nessuna vista trovata.</p>
       <div class="sidebar-bottom">
         <div class="local-badge"><span class="status-dot"></span>Dati sul tuo PC</div>
         <p class="author">Daniele Gabrovec</p>
@@ -49,7 +51,7 @@
     </div>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <dialog id="action-dialog" aria-labelledby="dialog-title"><form id="dialog-form"><h2 id="dialog-title"></h2><p id="dialog-description"></p><label id="dialog-label" for="dialog-input">Nome</label><input id="dialog-input" maxlength="120" autocomplete="off"><div class="dialog-actions"><button type="button" id="dialog-cancel" class="button secondary">Annulla</button><button type="submit" id="dialog-confirm" class="button primary">Conferma</button></div></form></dialog>
+  <dialog id="action-dialog" aria-labelledby="dialog-title" aria-describedby="dialog-description"><form id="dialog-form"><h2 id="dialog-title"></h2><p id="dialog-description"></p><label id="dialog-label" for="dialog-input">Nome</label><input id="dialog-input" maxlength="120" autocomplete="off"><div class="dialog-actions"><button type="button" id="dialog-cancel" class="button secondary">Annulla</button><button type="submit" id="dialog-confirm" class="button primary">Conferma</button></div></form></dialog>
   <dialog id="about-dialog" class="about-dialog" aria-labelledby="about-title">
     <div class="about-heading"><div><div class="eyebrow">SOFTWARE INDIPENDENTE</div><h2 id="about-title">CPU-RustT</h2></div><button type="button" id="about-close" class="button secondary">Chiudi</button></div>
     <div id="about-content" class="about-content"><p>Caricamento informazioni…</p></div>
